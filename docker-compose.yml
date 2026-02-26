@@ -1,0 +1,43 @@
+services:
+
+  db:
+    image: postgres:13
+    container_name: whiteboard-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: whiteboard
+    volumes:
+      - ./backend/seeds:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d whiteboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  backend:
+    build: ./backend
+    container_name: whiteboard-backend
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/whiteboard
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD","curl","-f","http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  frontend:
+    build: ./frontend
+    container_name: whiteboard-frontend
+    ports:
+      - "4000:5173"
+    depends_on:
+      - backend
