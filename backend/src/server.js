@@ -8,18 +8,28 @@ const passport = require("passport");
 const { Pool } = require("pg");
 const { v4: uuidv4 } = require("uuid");
 
+const http = require("http");
+const { Server } = require("socket.io");
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+ origin:true,
+ credentials:true
+}));
+
 app.use(express.json());
 
 /* DATABASE */
+
 const pool = new Pool({
  connectionString: process.env.DATABASE_URL
 });
 
+
 /* SESSION */
+
 app.use(session({
  secret:"secret123",
  resave:false,
@@ -39,6 +49,7 @@ passport.deserializeUser((user,done)=>{
 
 
 /* TEST LOGIN */
+
 app.get("/auth/test",(req,res)=>{
 
  req.session.user={
@@ -56,6 +67,7 @@ app.get("/auth/test",(req,res)=>{
 
 
 /* SESSION API */
+
 app.get("/api/auth/session",(req,res)=>{
 
  if(!req.session.user){
@@ -70,6 +82,7 @@ app.get("/api/auth/session",(req,res)=>{
 
 
 /* CREATE BOARD */
+
 app.post("/api/boards",async(req,res)=>{
 
  const boardId = uuidv4();
@@ -86,19 +99,8 @@ app.post("/api/boards",async(req,res)=>{
 });
 
 
-/* GET ALL BOARDS */
-app.get("/api/boards",async(req,res)=>{
-
- const result = await pool.query(
-  "SELECT * FROM boards ORDER BY created_at DESC"
- );
-
- res.json(result.rows);
-
-});
-
-
 /* LOAD BOARD */
+
 app.get("/api/boards/:boardId",async(req,res)=>{
 
  const boardId=req.params.boardId;
@@ -108,12 +110,17 @@ app.get("/api/boards/:boardId",async(req,res)=>{
   [boardId]
  );
 
- res.json(result.rows[0]);
+ res.json({
+  boardId:boardId,
+  objects:result.rows[0]?.objects || [],
+  updatedAt:new Date().toISOString()
+ });
 
 });
 
 
 /* SAVE BOARD */
+
 app.post("/api/boards/:boardId",async(req,res)=>{
 
  const boardId=req.params.boardId;
@@ -125,13 +132,15 @@ app.post("/api/boards/:boardId",async(req,res)=>{
  );
 
  res.json({
-  success:true
+  success:true,
+  boardId:boardId
  });
 
 });
 
 
 /* HEALTH API */
+
 app.get("/health",(req,res)=>{
 
  res.json({
@@ -142,6 +151,89 @@ app.get("/health",(req,res)=>{
 });
 
 
-app.listen(PORT,()=>{
+/* ===================== */
+/* SOCKET.IO SERVER */
+/* ===================== */
+
+const server = http.createServer(app);
+
+const io = new Server(server,{
+ cors:{
+  origin:"*"
+ }
+});
+
+
+/* USERS IN ROOM */
+
+const rooms = {};
+
+
+io.on("connection",(socket)=>{
+
+ console.log("User Connected:",socket.id);
+
+
+ socket.on("joinRoom",(data)=>{
+
+  const boardId=data.boardId;
+
+  socket.join(boardId);
+
+  if(!rooms[boardId]) rooms[boardId]=[];
+
+  const user={
+   id:socket.id,
+   name:"User-"+socket.id.substring(0,4)
+  };
+
+  rooms[boardId].push(user);
+
+  io.to(boardId).emit("roomUsers",{
+   users:rooms[boardId]
+  });
+
+  console.log("Joined Room:",boardId);
+
+ });
+
+
+ socket.on("cursorMove",(data)=>{
+
+  socket.to(data.boardId).emit("cursorUpdate",{
+   userId:socket.id,
+   x:data.x,
+   y:data.y
+  });
+
+ });
+
+
+ socket.on("draw",(data)=>{
+
+  socket.to(data.boardId).emit("drawUpdate",data);
+
+ });
+
+
+ socket.on("addObject",(data)=>{
+
+  socket.to(data.boardId).emit("objectAdded",data);
+
+ });
+
+
+ socket.on("disconnect",()=>{
+
+  console.log("User Disconnected:",socket.id);
+
+ });
+
+});
+
+
+server.listen(PORT,()=>{
+
  console.log("Server running on port",PORT);
+
 });
