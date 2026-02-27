@@ -1,13 +1,14 @@
+
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY,
-  name TEXT,
-  email TEXT UNIQUE,
-  image TEXT
+ id UUID PRIMARY KEY,
+ name TEXT,
+ email TEXT,
+ image TEXT
 );
 
 CREATE TABLE IF NOT EXISTS boards (
-  id UUID PRIMARY KEY,
-  owner_id UUID REFERENCES users(id),
-  objects JSONB DEFAULT '[]',
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+ id UUID PRIMARY KEY,
+ user_id UUID,
+ data JSONB,
+ updated_at TIMESTAMP DEFAULT NOW()
 );
