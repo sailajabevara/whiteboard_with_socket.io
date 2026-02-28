@@ -1,5 +1,6 @@
 
 
+
 // import { useEffect,useRef,useState } from "react";
 // import socket from "./socket";
 
@@ -12,21 +13,27 @@
 
 // const drawing=useRef(false);
 
-// /* REAL BOARD ID */
+// const startX=useRef(0);
+// const startY=useRef(0);
 
-// const boardId="92f6cdd5-7690-4588-b0f2-8a8d95e2404f";
+// /* BOARD ID */
 
-// /* STORE ALL OBJECTS */
+// const boardId="5f3ffffc-6dd2-4b00-82db-2a4efae200fe";
+
+// /* STORE OBJECTS */
 
 // const objectsRef=useRef([]);
+
+// /* TOOL */
+
+// const [tool,setTool]=useState("pen");
 
 // const [color,setColor]=useState("#000000");
 // const [size,setSize]=useState(3);
 
 
-// /* ================= */
+
 // /* JOIN ROOM */
-// /* ================= */
 
 // useEffect(()=>{
 
@@ -35,9 +42,8 @@
 // },[]);
 
 
-// /* ================= */
+
 // /* LOAD BOARD */
-// /* ================= */
 
 // useEffect(()=>{
 
@@ -55,25 +61,34 @@
 
 // const ctx=canvas.getContext("2d");
 
-// /* CLEAR */
-
 // ctx.clearRect(0,0,canvas.width,canvas.height);
-
-// /* DRAW SAVED */
 
 // data.objects.forEach(obj=>{
 
+// if(obj.type==="pen"){
+
 // ctx.beginPath();
-
 // ctx.moveTo(obj.x0,obj.y0);
-
 // ctx.lineTo(obj.x1,obj.y1);
+// ctx.strokeStyle=obj.color;
+// ctx.lineWidth=obj.size;
+// ctx.stroke();
+
+// }
+
+// if(obj.type==="rect"){
 
 // ctx.strokeStyle=obj.color;
-
 // ctx.lineWidth=obj.size;
 
-// ctx.stroke();
+// ctx.strokeRect(
+// obj.x,
+// obj.y,
+// obj.width,
+// obj.height
+// );
+
+// }
 
 // });
 
@@ -83,31 +98,21 @@
 
 
 
-// /* ================= */
 // /* RECEIVE DRAW */
-// /* ================= */
 
 // useEffect(()=>{
 
 // socket.on("drawUpdate",(data)=>{
 
 // const canvas=canvasRef.current;
-
 // const ctx=canvas.getContext("2d");
 
 // ctx.beginPath();
-
 // ctx.moveTo(data.x0,data.y0);
-
 // ctx.lineTo(data.x1,data.y1);
-
 // ctx.strokeStyle=data.color;
-
 // ctx.lineWidth=data.size;
-
 // ctx.stroke();
-
-// /* STORE */
 
 // objectsRef.current.push(data);
 
@@ -117,65 +122,133 @@
 
 
 
-// /* ================= */
+// /* RECEIVE RECTANGLE */
+
+// useEffect(()=>{
+
+// socket.on("objectAdded",(data)=>{
+
+// const canvas=canvasRef.current;
+// const ctx=canvas.getContext("2d");
+
+// ctx.strokeStyle=data.color;
+// ctx.lineWidth=data.size;
+
+// ctx.strokeRect(
+// data.x,
+// data.y,
+// data.width,
+// data.height
+// );
+
+// objectsRef.current.push(data);
+
+// });
+
+// },[]);
+
+
+
 // /* START DRAW */
-// /* ================= */
 
 // const startDraw=(e)=>{
 
 // drawing.current=true;
 
-// lastX.current=e.nativeEvent.offsetX;
+// const x=e.nativeEvent.offsetX;
+// const y=e.nativeEvent.offsetY;
 
-// lastY.current=e.nativeEvent.offsetY;
+// lastX.current=x;
+// lastY.current=y;
+
+// startX.current=x;
+// startY.current=y;
 
 // };
 
 
 
-// /* ================= */
 // /* STOP DRAW */
-// /* ================= */
 
-// const stopDraw=()=>{
-
-// drawing.current=false;
-
-// };
-
-
-
-// /* ================= */
-// /* DRAW */
-// /* ================= */
-
-// const draw=(e)=>{
+// const stopDraw=(e)=>{
 
 // if(!drawing.current) return;
 
-// const canvas=canvasRef.current;
+// drawing.current=false;
 
+
+// if(tool==="rect"){
+
+// const canvas=canvasRef.current;
 // const ctx=canvas.getContext("2d");
 
 // const x=e.nativeEvent.offsetX;
 // const y=e.nativeEvent.offsetY;
 
-// ctx.beginPath();
-
-// ctx.moveTo(lastX.current,lastY.current);
-
-// ctx.lineTo(x,y);
+// const width=x-startX.current;
+// const height=y-startY.current;
 
 // ctx.strokeStyle=color;
-
 // ctx.lineWidth=size;
 
+// ctx.strokeRect(
+// startX.current,
+// startY.current,
+// width,
+// height
+// );
+
+
+// const rectData={
+
+// boardId,
+// type:"rect",
+// x:startX.current,
+// y:startY.current,
+// width,
+// height,
+// color,
+// size
+
+// };
+
+// objectsRef.current.push(rectData);
+
+// socket.emit("addObject",rectData);
+
+// }
+
+// };
+
+
+
+// /* DRAW */
+
+// const draw=(e)=>{
+
+// if(!drawing.current) return;
+
+// if(tool!=="pen") return;
+
+// const canvas=canvasRef.current;
+// const ctx=canvas.getContext("2d");
+
+// const x=e.nativeEvent.offsetX;
+// const y=e.nativeEvent.offsetY;
+
+
+// ctx.beginPath();
+// ctx.moveTo(lastX.current,lastY.current);
+// ctx.lineTo(x,y);
+// ctx.strokeStyle=color;
+// ctx.lineWidth=size;
 // ctx.stroke();
 
 
 // const drawData={
 
 // boardId,
+// type:"pen",
 // x0:lastX.current,
 // y0:lastY.current,
 // x1:x,
@@ -185,16 +258,9 @@
 
 // };
 
-
-// /* STORE */
-
 // objectsRef.current.push(drawData);
 
-
-// /* SEND SOCKET */
-
 // socket.emit("draw",drawData);
-
 
 // lastX.current=x;
 // lastY.current=y;
@@ -203,35 +269,24 @@
 
 
 
-// /* ================= */
 // /* SAVE BOARD */
-// /* ================= */
 
 // const saveBoard=async()=>{
 
 // await fetch(
-
 // "http://localhost:3001/api/boards/"+boardId,
-
 // {
-
 // method:"POST",
-
 // headers:{
 // "Content-Type":"application/json"
 // },
-
 // body:JSON.stringify({
-
 // objects:objectsRef.current
-
 // })
-
 // }
-
 // );
 
-// alert("Saved Successfully");
+// alert("Saved successfully");
 
 // };
 
@@ -242,6 +297,18 @@
 // <div>
 
 // <h1>Whiteboard</h1>
+
+
+// <button onClick={()=>setTool("pen")}>
+// Pen
+// </button>
+
+// <button onClick={()=>setTool("rect")}>
+// Rectangle
+// </button>
+
+
+// <br/><br/>
 
 
 // Color:
@@ -305,13 +372,23 @@ const lastY=useRef(0);
 
 const drawing=useRef(false);
 
-/* REAL BOARD ID */
+const startX=useRef(0);
+const startY=useRef(0);
 
-const boardId="e8f66d43-f4a6-40e1-a9a9-42b7736690a6";
+
+/* BOARD ID */
+
+const boardId="5f3ffffc-6dd2-4b00-82db-2a4efae200fe";
+
 
 /* STORE OBJECTS */
 
 const objectsRef=useRef([]);
+
+
+/* TOOL */
+
+const [tool,setTool]=useState("pen");
 
 const [color,setColor]=useState("#000000");
 const [size,setSize]=useState(3);
@@ -338,7 +415,7 @@ fetch("http://localhost:3001/api/boards/"+boardId)
 
 .then(data=>{
 
-if(!data || !data.objects) return;
+if(!data.objects) return;
 
 objectsRef.current=data.objects;
 
@@ -347,35 +424,46 @@ const ctx=canvas.getContext("2d");
 
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-/* DRAW SAVED */
+
+/* DRAW SAVED OBJECTS */
 
 data.objects.forEach(obj=>{
 
-if(obj.type==="line"){
+
+/* PEN */
+
+if(obj.type==="pen"){
 
 ctx.beginPath();
 
 ctx.moveTo(obj.x0,obj.y0);
+
 ctx.lineTo(obj.x1,obj.y1);
 
-ctx.strokeStyle=obj.color;
-ctx.lineWidth=obj.size;
+ctx.strokeStyle=obj.color || "black";
+
+ctx.lineWidth=obj.size || 3;
 
 ctx.stroke();
 
 }
 
+
 /* RECTANGLE */
 
 if(obj.type==="rect"){
 
-ctx.strokeStyle=obj.color;
+ctx.strokeStyle=obj.color || "black";
+
+ctx.lineWidth=obj.size || 3;
 
 ctx.strokeRect(
+
 obj.x,
 obj.y,
-obj.w,
-obj.h
+obj.width,
+obj.height
+
 );
 
 }
@@ -388,7 +476,7 @@ obj.h
 
 
 
-/* RECEIVE DRAW */
+/* RECEIVE PEN */
 
 useEffect(()=>{
 
@@ -400,9 +488,11 @@ const ctx=canvas.getContext("2d");
 ctx.beginPath();
 
 ctx.moveTo(data.x0,data.y0);
+
 ctx.lineTo(data.x1,data.y1);
 
 ctx.strokeStyle=data.color;
+
 ctx.lineWidth=data.size;
 
 ctx.stroke();
@@ -426,11 +516,15 @@ const ctx=canvas.getContext("2d");
 
 ctx.strokeStyle=data.color;
 
+ctx.lineWidth=data.size;
+
 ctx.strokeRect(
+
 data.x,
 data.y,
-data.w,
-data.h
+data.width,
+data.height
+
 );
 
 objectsRef.current.push(data);
@@ -441,34 +535,37 @@ objectsRef.current.push(data);
 
 
 
-/* START DRAW */
+/* START */
 
 const startDraw=(e)=>{
 
 drawing.current=true;
 
-lastX.current=e.nativeEvent.offsetX;
-lastY.current=e.nativeEvent.offsetY;
+const x=e.nativeEvent.offsetX;
+const y=e.nativeEvent.offsetY;
+
+lastX.current=x;
+lastY.current=y;
+
+startX.current=x;
+startY.current=y;
 
 };
 
 
 
-/* STOP DRAW */
+/* STOP */
 
-const stopDraw=()=>{
+const stopDraw=(e)=>{
+
+if(!drawing.current) return;
 
 drawing.current=false;
 
-};
 
+/* RECTANGLE */
 
-
-/* DRAW */
-
-const draw=(e)=>{
-
-if(!drawing.current) return;
+if(tool==="rect"){
 
 const canvas=canvasRef.current;
 const ctx=canvas.getContext("2d");
@@ -476,12 +573,72 @@ const ctx=canvas.getContext("2d");
 const x=e.nativeEvent.offsetX;
 const y=e.nativeEvent.offsetY;
 
+const width=x-startX.current;
+const height=y-startY.current;
+
+
+ctx.strokeStyle=color;
+
+ctx.lineWidth=size;
+
+ctx.strokeRect(
+
+startX.current,
+startY.current,
+width,
+height
+
+);
+
+
+const rectData={
+
+boardId,
+type:"rect",
+x:startX.current,
+y:startY.current,
+width,
+height,
+color,
+size
+
+};
+
+
+objectsRef.current.push(rectData);
+
+
+socket.emit("addObject",rectData);
+
+}
+
+};
+
+
+
+/* DRAW PEN */
+
+const draw=(e)=>{
+
+if(!drawing.current) return;
+
+if(tool!=="pen") return;
+
+const canvas=canvasRef.current;
+const ctx=canvas.getContext("2d");
+
+const x=e.nativeEvent.offsetX;
+const y=e.nativeEvent.offsetY;
+
+
 ctx.beginPath();
 
 ctx.moveTo(lastX.current,lastY.current);
+
 ctx.lineTo(x,y);
 
 ctx.strokeStyle=color;
+
 ctx.lineWidth=size;
 
 ctx.stroke();
@@ -489,9 +646,8 @@ ctx.stroke();
 
 const drawData={
 
-type:"line",
-
 boardId,
+type:"pen",
 x0:lastX.current,
 y0:lastY.current,
 x1:x,
@@ -513,49 +669,7 @@ lastY.current=y;
 
 
 
-/* ADD RECTANGLE */
-
-const addRectangle=()=>{
-
-const canvas=canvasRef.current;
-const ctx=canvas.getContext("2d");
-
-const rect={
-
-type:"rect",
-
-boardId,
-
-x:100,
-y:100,
-
-w:200,
-h:120,
-
-color
-
-};
-
-
-ctx.strokeStyle=color;
-
-ctx.strokeRect(
-rect.x,
-rect.y,
-rect.w,
-rect.h
-);
-
-
-objectsRef.current.push(rect);
-
-socket.emit("addObject",rect);
-
-};
-
-
-
-/* SAVE BOARD */
+/* SAVE */
 
 const saveBoard=async()=>{
 
@@ -594,6 +708,18 @@ return(
 <h1>Whiteboard</h1>
 
 
+<button onClick={()=>setTool("pen")}>
+Pen
+</button>
+
+<button onClick={()=>setTool("rect")}>
+Rectangle
+</button>
+
+
+<br/><br/>
+
+
 Color:
 
 <input
@@ -614,20 +740,12 @@ onChange={(e)=>setSize(e.target.value)}
 />
 
 
-
-<button onClick={addRectangle}>
-Add Rectangle
-</button>
-
-
-
 <button onClick={saveBoard}>
 Save Board
 </button>
 
 
 <br/><br/>
-
 
 
 <canvas
