@@ -1,6 +1,5 @@
 
-
-import {useEffect,useRef,useState} from "react";
+import { useEffect,useRef,useState } from "react";
 import socket from "./socket";
 
 function BoardPage(){
@@ -17,14 +16,30 @@ const startY=useRef(0);
 
 const boardId="5f3ffffc-6dd2-4b00-82db-2a4efae200fe";
 
+/* OBJECT STORAGE */
+
 const objectsRef=useRef([]);
 
+/* UNDO REDO STACKS */
+
+const undoStack=useRef([]);
+const redoStack=useRef([]);
+
+/* TOOL */
+
 const [tool,setTool]=useState("pen");
+
 const [color,setColor]=useState("#000000");
 const [size,setSize]=useState(3);
 
+/* USERS */
+
 const [users,setUsers]=useState([]);
+
+/* CURSORS */
+
 const [cursors,setCursors]=useState({});
+
 
 
 /* JOIN ROOM */
@@ -34,6 +49,7 @@ useEffect(()=>{
 socket.emit("joinRoom",{boardId});
 
 },[]);
+
 
 
 /* USERS LIST */
@@ -49,6 +65,7 @@ setUsers(data.users);
 },[]);
 
 
+
 /* LOAD BOARD */
 
 useEffect(()=>{
@@ -57,7 +74,9 @@ fetch("http://localhost:3001/api/boards/"+boardId)
 .then(res=>res.json())
 .then(data=>{
 
-objectsRef.current=data.objects || [];
+if(!data.objects) return;
+
+objectsRef.current=data.objects;
 
 drawAll();
 
@@ -74,7 +93,7 @@ const drawAll=()=>{
 const canvas=canvasRef.current;
 const ctx=canvas.getContext("2d");
 
-ctx.clearRect(0,0,900,500);
+ctx.clearRect(0,0,canvas.width,canvas.height);
 
 objectsRef.current.forEach(obj=>{
 
@@ -108,18 +127,21 @@ obj.height
 };
 
 
-/* RECEIVE PEN */
+
+/* RECEIVE DRAW */
 
 useEffect(()=>{
 
 socket.on("drawUpdate",(data)=>{
 
 objectsRef.current.push(data);
+
 drawAll();
 
 });
 
 },[]);
+
 
 
 /* RECEIVE RECT */
@@ -129,11 +151,13 @@ useEffect(()=>{
 socket.on("objectAdded",(data)=>{
 
 objectsRef.current.push(data);
+
 drawAll();
 
 });
 
 },[]);
+
 
 
 /* RECEIVE CURSOR */
@@ -162,8 +186,8 @@ drawing.current=true;
 lastX.current=e.nativeEvent.offsetX;
 lastY.current=e.nativeEvent.offsetY;
 
-startX.current=lastX.current;
-startY.current=lastY.current;
+startX.current=e.nativeEvent.offsetX;
+startY.current=e.nativeEvent.offsetY;
 
 };
 
@@ -195,6 +219,11 @@ size
 
 objectsRef.current.push(rectData);
 
+/* UNDO STACK */
+
+undoStack.current.push(rectData);
+redoStack.current=[];
+
 socket.emit("addObject",rectData);
 
 drawAll();
@@ -209,13 +238,11 @@ drawAll();
 
 const draw=(e)=>{
 
-const x=e.nativeEvent.offsetX;
-const y=e.nativeEvent.offsetY;
-
-socket.emit("cursorMove",{boardId,x,y});
-
 if(!drawing.current) return;
 if(tool!=="pen") return;
+
+const x=e.nativeEvent.offsetX;
+const y=e.nativeEvent.offsetY;
 
 const drawData={
 
@@ -232,12 +259,61 @@ size
 
 objectsRef.current.push(drawData);
 
+/* UNDO STACK */
+
+undoStack.current.push(drawData);
+redoStack.current=[];
+
 socket.emit("draw",drawData);
 
 drawAll();
 
 lastX.current=x;
 lastY.current=y;
+
+/* CURSOR */
+
+socket.emit("cursorMove",{
+boardId,
+x,
+y
+});
+
+};
+
+
+
+/* UNDO */
+
+const undo=()=>{
+
+if(undoStack.current.length===0) return;
+
+const last=undoStack.current.pop();
+
+redoStack.current.push(last);
+
+objectsRef.current.pop();
+
+drawAll();
+
+};
+
+
+
+/* REDO */
+
+const redo=()=>{
+
+if(redoStack.current.length===0) return;
+
+const obj=redoStack.current.pop();
+
+undoStack.current.push(obj);
+
+objectsRef.current.push(obj);
+
+drawAll();
 
 };
 
@@ -265,13 +341,15 @@ alert("Saved");
 };
 
 
-/* TEST FUNCTION */
+
+/* JSON TEST FUNCTION */
 
 window.getCanvasAsJSON=()=>{
 
 return objectsRef.current;
 
 };
+
 
 
 return(
@@ -290,6 +368,23 @@ onClick={()=>setTool("rect")}
 >
 Rectangle
 </button>
+
+
+<button
+data-testid="undo-button"
+onClick={undo}
+>
+Undo
+</button>
+
+
+<button
+data-testid="redo-button"
+onClick={redo}
+>
+Redo
+</button>
+
 
 <br/><br/>
 
@@ -311,25 +406,30 @@ value={size}
 onChange={(e)=>setSize(e.target.value)}
 />
 
+
 <button onClick={saveBoard}>
 Save Board
 </button>
 
-<br/><br/>
 
-Users:
 
-<div data-testid="user-list">
+<h3>Users</h3>
+
+<ul data-testid="user-list">
 
 {users.map(u=>(
-<div key={u.id}>
+
+<li key={u.id}>
 {u.name}
-</div>
+</li>
+
 ))}
 
-</div>
+</ul>
+
 
 <br/>
+
 
 <div style={{position:"relative"}}>
 
@@ -345,8 +445,7 @@ onMouseLeave={stopDraw}
 />
 
 
-{
-Object.values(cursors).map((c,i)=>(
+{Object.values(cursors).map((c,i)=>(
 
 <div
 key={i}
@@ -362,8 +461,8 @@ borderRadius:"50%"
 }}
 />
 
-))
-}
+))}
+
 
 </div>
 
